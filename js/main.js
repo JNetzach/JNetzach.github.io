@@ -1,781 +1,729 @@
-document.addEventListener('DOMContentLoaded', function () {
-  let blogNameWidth, menusWidth, searchWidth, $nav
-  let mobileSidebarOpen = false
-
-  const adjustMenu = (init) => {
-    if (init) {
-      blogNameWidth = document.getElementById('site-name').offsetWidth
-      const $menusEle = document.querySelectorAll('#menus .menus_item')
-      menusWidth = 0
-      $menusEle.length && $menusEle.forEach(i => { menusWidth += i.offsetWidth })
-      const $searchEle = document.querySelector('#search-button')
-      searchWidth = $searchEle ? $searchEle.offsetWidth : 0
-      $nav = document.getElementById('nav')
-    }
-
-    let hideMenuIndex = ''
-    if (window.innerWidth < 768) hideMenuIndex = true
-    else hideMenuIndex = blogNameWidth + menusWidth + searchWidth > $nav.offsetWidth - 120
-
-    if (hideMenuIndex) {
-      $nav.classList.add('hide-menu')
-    } else {
-      $nav.classList.remove('hide-menu')
-    }
-  }
-
-  // 初始化header
-  const initAdjust = () => {
-    adjustMenu(true)
-    $nav.classList.add('show')
-  }
-
-  // sidebar menus
-  const sidebarFn = {
-    open: () => {
-      btf.sidebarPaddingR()
-      document.body.style.overflow = 'hidden'
-      btf.animateIn(document.getElementById('menu-mask'), 'to_show 0.5s')
-      document.getElementById('sidebar-menus').classList.add('open')
-      mobileSidebarOpen = true
-    },
-    close: () => {
-      const $body = document.body
-      $body.style.overflow = ''
-      $body.style.paddingRight = ''
-      btf.animateOut(document.getElementById('menu-mask'), 'to_hide 0.5s')
-      document.getElementById('sidebar-menus').classList.remove('open')
-      mobileSidebarOpen = false
-    }
-  }
-
-  /**
-   * 首頁top_img底下的箭頭
-   */
-  const scrollDownInIndex = () => {
-    const $scrollDownEle = document.getElementById('scroll-down')
-    $scrollDownEle && $scrollDownEle.addEventListener('click', function () {
-      btf.scrollToDest(document.getElementById('content-inner').offsetTop, 300)
-    })
-  }
-
-  /**
-   * 代碼
-   * 只適用於Hexo默認的代碼渲染
-   */
-  const addHighlightTool = function () {
-    const highLight = GLOBAL_CONFIG.highlight
-    if (!highLight) return
-
-    const isHighlightCopy = highLight.highlightCopy
-    const isHighlightLang = highLight.highlightLang
-    const isHighlightShrink = GLOBAL_CONFIG_SITE.isHighlightShrink
-    const highlightHeightLimit = highLight.highlightHeightLimit
-    const isShowTool = isHighlightCopy || isHighlightLang || isHighlightShrink !== undefined
-    const $figureHighlight = highLight.plugin === 'highlighjs' ? document.querySelectorAll('figure.highlight') : document.querySelectorAll('pre[class*="language-"]')
-
-    if (!((isShowTool || highlightHeightLimit) && $figureHighlight.length)) return
-
-    const isPrismjs = highLight.plugin === 'prismjs'
-
-    let highlightShrinkEle = ''
-    let highlightCopyEle = ''
-    const highlightShrinkClass = isHighlightShrink === true ? 'closed' : ''
-
-    if (isHighlightShrink !== undefined) {
-      highlightShrinkEle = `<i class="fas fa-angle-down expand ${highlightShrinkClass}"></i>`
-    }
-
-    if (isHighlightCopy) {
-      highlightCopyEle = '<div class="copy-notice"></div><i class="fas fa-paste copy-button"></i>'
-    }
-
-    const copy = (text, ctx) => {
-      if (document.queryCommandSupported && document.queryCommandSupported('copy')) {
-        document.execCommand('copy')
-        if (GLOBAL_CONFIG.Snackbar !== undefined) {
-          btf.snackbarShow(GLOBAL_CONFIG.copy.success)
-        } else {
-          const prevEle = ctx.previousElementSibling
-          prevEle.innerText = GLOBAL_CONFIG.copy.success
-          prevEle.style.opacity = 1
-          setTimeout(() => { prevEle.style.opacity = 0 }, 700)
-        }
-      } else {
-        if (GLOBAL_CONFIG.Snackbar !== undefined) {
-          btf.snackbarShow(GLOBAL_CONFIG.copy.noSupport)
-        } else {
-          ctx.previousElementSibling.innerText = GLOBAL_CONFIG.copy.noSupport
-        }
-      }
-    }
-
-    // click events
-    const highlightCopyFn = (ele) => {
-      const $buttonParent = ele.parentNode
-      $buttonParent.classList.add('copy-true')
-      const selection = window.getSelection()
-      const range = document.createRange()
-      if (isPrismjs) range.selectNodeContents($buttonParent.querySelectorAll('pre code')[0])
-      else range.selectNodeContents($buttonParent.querySelectorAll('table .code pre')[0])
-      selection.removeAllRanges()
-      selection.addRange(range)
-      const text = selection.toString()
-      copy(text, ele.lastChild)
-      selection.removeAllRanges()
-      $buttonParent.classList.remove('copy-true')
-    }
-
-    const highlightShrinkFn = (ele) => {
-      const $nextEle = [...ele.parentNode.children].slice(1)
-      ele.firstChild.classList.toggle('closed')
-      if (btf.isHidden($nextEle[$nextEle.length - 1])) {
-        $nextEle.forEach(e => { e.style.display = 'block' })
-      } else {
-        $nextEle.forEach(e => { e.style.display = 'none' })
-      }
-    }
-
-    const highlightToolsFn = function (e) {
-      const $target = e.target.classList
-      if ($target.contains('expand')) highlightShrinkFn(this)
-      else if ($target.contains('copy-button')) highlightCopyFn(this)
-    }
-
-    const expandCode = function () {
-      this.classList.toggle('expand-done')
-    }
-
-    function createEle (lang, item, service) {
-      const fragment = document.createDocumentFragment()
-
-      if (isShowTool) {
-        const hlTools = document.createElement('div')
-        hlTools.className = `highlight-tools ${highlightShrinkClass}`
-        hlTools.innerHTML = highlightShrinkEle + lang + highlightCopyEle
-        hlTools.addEventListener('click', highlightToolsFn)
-        fragment.appendChild(hlTools)
-      }
-
-      if (highlightHeightLimit && item.offsetHeight > highlightHeightLimit + 30) {
-        const ele = document.createElement('div')
-        ele.className = 'code-expand-btn'
-        ele.innerHTML = '<i class="fas fa-angle-double-down"></i>'
-        ele.addEventListener('click', expandCode)
-        fragment.appendChild(ele)
-      }
-
-      if (service === 'hl') {
-        item.insertBefore(fragment, item.firstChild)
-      } else {
-        item.parentNode.insertBefore(fragment, item)
-      }
-    }
-
-    if (isHighlightLang) {
-      if (isPrismjs) {
-        $figureHighlight.forEach(function (item) {
-          const langName = item.getAttribute('data-language') ? item.getAttribute('data-language') : 'Code'
-          const highlightLangEle = `<div class="code-lang">${langName}</div>`
-          btf.wrap(item, 'figure', { class: 'highlight' })
-          createEle(highlightLangEle, item)
-        })
-      } else {
-        $figureHighlight.forEach(function (item) {
-          let langName = item.getAttribute('class').split(' ')[1]
-          if (langName === 'plain' || langName === undefined) langName = 'Code'
-          const highlightLangEle = `<div class="code-lang">${langName}</div>`
-          createEle(highlightLangEle, item, 'hl')
-        })
-      }
-    } else {
-      if (isPrismjs) {
-        $figureHighlight.forEach(function (item) {
-          btf.wrap(item, 'figure', { class: 'highlight' })
-          createEle('', item)
-        })
-      } else {
-        $figureHighlight.forEach(function (item) {
-          createEle('', item, 'hl')
-        })
-      }
-    }
-  }
-
-  /**
-   * PhotoFigcaption
-   */
-  function addPhotoFigcaption () {
-    document.querySelectorAll('#article-container img').forEach(function (item) {
-      const parentEle = item.parentNode
-      const altValue = item.title || item.alt
-      if (altValue && !parentEle.parentNode.classList.contains('justified-gallery')) {
-        const ele = document.createElement('div')
-        ele.className = 'img-alt is-center'
-        ele.textContent = altValue
-        parentEle.insertBefore(ele, item.nextSibling)
-      }
-    })
-  }
-
-  /**
-   * Lightbox
-   */
-  const runLightbox = () => {
-    btf.loadLightbox(document.querySelectorAll('#article-container img:not(.no-lightbox)'))
-  }
-
-  /**
-   * justified-gallery 圖庫排版
-   */
-  const runJustifiedGallery = function (ele) {
-    ele.forEach(item => {
-      const $imgList = item.querySelectorAll('img')
-
-      $imgList.forEach(i => {
-        const dataLazySrc = i.getAttribute('data-lazy-src')
-        if (dataLazySrc) i.src = dataLazySrc
-        btf.wrap(i, 'div', { class: 'fj-gallery-item' })
-      })
-    })
-
-    if (window.fjGallery) {
-      setTimeout(() => { btf.initJustifiedGallery(ele) }, 100)
-      return
-    }
-
-    const newEle = document.createElement('link')
-    newEle.rel = 'stylesheet'
-    newEle.href = GLOBAL_CONFIG.source.justifiedGallery.css
-    document.body.appendChild(newEle)
-    getScript(`${GLOBAL_CONFIG.source.justifiedGallery.js}`).then(() => { btf.initJustifiedGallery(ele) })
-  }
-
-  /**
-   * 滾動處理
-   */
-  const scrollFn = function () {
-    const $rightside = document.getElementById('rightside')
-    const innerHeight = window.innerHeight + 56
-
-    // 當滾動條小于 56 的時候
-    if (document.body.scrollHeight <= innerHeight) {
-      $rightside.style.cssText = 'opacity: 1; transform: translateX(-58px)'
-      return
-    }
-
-    // find the scroll direction
-    function scrollDirection (currentTop) {
-      const result = currentTop > initTop // true is down & false is up
-      initTop = currentTop
-      return result
-    }
-
-    let initTop = 0
-    let isChatShow = true
-    const $header = document.getElementById('page-header')
-    const isChatBtnHide = typeof chatBtnHide === 'function'
-    const isChatBtnShow = typeof chatBtnShow === 'function'
-
-    window.scrollCollect = () => {
-      return btf.throttle(function (e) {
-        const currentTop = window.scrollY || document.documentElement.scrollTop
-        const isDown = scrollDirection(currentTop)
-        if (currentTop > 56) {
-          if (isDown) {
-            if ($header.classList.contains('nav-visible')) $header.classList.remove('nav-visible')
-            if (isChatBtnShow && isChatShow === true) {
-              chatBtnHide()
-              isChatShow = false
-            }
-          } else {
-            if (!$header.classList.contains('nav-visible')) $header.classList.add('nav-visible')
-            if (isChatBtnHide && isChatShow === false) {
-              chatBtnShow()
-              isChatShow = true
-            }
-          }
-          $header.classList.add('nav-fixed')
-          if (window.getComputedStyle($rightside).getPropertyValue('opacity') === '0') {
-            $rightside.style.cssText = 'opacity: 0.8; transform: translateX(-58px)'
-          }
-        } else {
-          if (currentTop === 0) {
-            $header.classList.remove('nav-fixed', 'nav-visible')
-          }
-          $rightside.style.cssText = "opacity: ''; transform: ''"
-        }
-
-        if (document.body.scrollHeight <= innerHeight) {
-          $rightside.style.cssText = 'opacity: 0.8; transform: translateX(-58px)'
-        }
-      }, 200)()
-    }
-
-    window.addEventListener('scroll', scrollCollect)
-  }
-
-  /**
-  * toc,anchor
-  */
-  const scrollFnToDo = function () {
-    const isToc = GLOBAL_CONFIG_SITE.isToc
-    const isAnchor = GLOBAL_CONFIG.isAnchor
-    const $article = document.getElementById('article-container')
-
-    if (!($article && (isToc || isAnchor))) return
-
-    let $tocLink, $cardToc, scrollPercent, autoScrollToc, isExpand
-
-    if (isToc) {
-      const $cardTocLayout = document.getElementById('card-toc')
-      $cardToc = $cardTocLayout.getElementsByClassName('toc-content')[0]
-      $tocLink = $cardToc.querySelectorAll('.toc-link')
-      const $tocPercentage = $cardTocLayout.querySelector('.toc-percentage')
-      isExpand = $cardToc.classList.contains('is-expand')
-
-      scrollPercent = currentTop => {
-        const docHeight = $article.clientHeight
-        const winHeight = document.documentElement.clientHeight
-        const headerHeight = $article.offsetTop
-        const contentMath = (docHeight > winHeight) ? (docHeight - winHeight) : (document.documentElement.scrollHeight - winHeight)
-        const scrollPercent = (currentTop - headerHeight) / (contentMath)
-        const scrollPercentRounded = Math.round(scrollPercent * 100)
-        const percentage = (scrollPercentRounded > 100) ? 100 : (scrollPercentRounded <= 0) ? 0 : scrollPercentRounded
-        $tocPercentage.textContent = percentage
-      }
-
-      window.mobileToc = {
-        open: () => {
-          $cardTocLayout.style.cssText = 'animation: toc-open .3s; opacity: 1; right: 55px'
-        },
-
-        close: () => {
-          $cardTocLayout.style.animation = 'toc-close .2s'
-          setTimeout(() => {
-            $cardTocLayout.style.cssText = "opacity:''; animation: ''; right: ''"
-          }, 100)
-        }
-      }
-
-      // toc元素點擊
-      $cardToc.addEventListener('click', e => {
-        e.preventDefault()
-        const $target = e.target.classList.contains('toc-link')
-          ? e.target
-          : e.target.parentElement
-        btf.scrollToDest(btf.getEleTop(document.getElementById(decodeURI($target.getAttribute('href')).replace('#', ''))), 300)
-        if (window.innerWidth < 900) {
-          window.mobileToc.close()
-        }
-      })
-
-      autoScrollToc = item => {
-        const activePosition = item.getBoundingClientRect().top
-        const sidebarScrollTop = $cardToc.scrollTop
-        if (activePosition > (document.documentElement.clientHeight - 100)) {
-          $cardToc.scrollTop = sidebarScrollTop + 150
-        }
-        if (activePosition < 100) {
-          $cardToc.scrollTop = sidebarScrollTop - 150
-        }
-      }
-    }
-
-    // find head position & add active class
-    const list = $article.querySelectorAll('h1,h2,h3,h4,h5,h6')
-    let detectItem = ''
-    const findHeadPosition = function (top) {
-      if (top === 0) {
-        return false
-      }
-
-      let currentId = ''
-      let currentIndex = ''
-
-      list.forEach(function (ele, index) {
-        if (top > btf.getEleTop(ele) - 80) {
-          const id = ele.id
-          currentId = id ? '#' + encodeURI(id) : ''
-          currentIndex = index
-        }
-      })
-
-      if (detectItem === currentIndex) return
-
-      if (isAnchor) btf.updateAnchor(currentId)
-
-      detectItem = currentIndex
-
-      if (isToc) {
-        $cardToc.querySelectorAll('.active').forEach(i => { i.classList.remove('active') })
-
-        if (currentId === '') {
-          return
-        }
-
-        const currentActive = $tocLink[currentIndex]
-        currentActive.classList.add('active')
-
-        setTimeout(() => {
-          autoScrollToc(currentActive)
-        }, 0)
-
-        if (isExpand) return
-        let parent = currentActive.parentNode
-
-        for (; !parent.matches('.toc'); parent = parent.parentNode) {
-          if (parent.matches('li')) parent.classList.add('active')
-        }
-      }
-    }
-
-    // main of scroll
-    window.tocScrollFn = function () {
-      return btf.throttle(function () {
-        const currentTop = window.scrollY || document.documentElement.scrollTop
-        isToc && scrollPercent(currentTop)
-        findHeadPosition(currentTop)
-      }, 100)()
-    }
-    window.addEventListener('scroll', tocScrollFn)
-  }
-
-  /**
-   * Rightside
-   */
-  const rightSideFn = {
-    switchReadMode: () => { // read-mode
-      const $body = document.body
-      $body.classList.add('read-mode')
-      const newEle = document.createElement('button')
-      newEle.type = 'button'
-      newEle.className = 'fas fa-sign-out-alt exit-readmode'
-      $body.appendChild(newEle)
-
-      function clickFn () {
-        $body.classList.remove('read-mode')
-        newEle.remove()
-        newEle.removeEventListener('click', clickFn)
-      }
-
-      newEle.addEventListener('click', clickFn)
-    },
-    switchDarkMode: () => { // Switch Between Light And Dark Mode
-      const nowMode = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
-      if (nowMode === 'light') {
-        activateDarkMode()
-        saveToLocal.set('theme', 'dark', 2)
-        GLOBAL_CONFIG.Snackbar !== undefined && btf.snackbarShow(GLOBAL_CONFIG.Snackbar.day_to_night)
-      } else {
-        activateLightMode()
-        saveToLocal.set('theme', 'light', 2)
-        GLOBAL_CONFIG.Snackbar !== undefined && btf.snackbarShow(GLOBAL_CONFIG.Snackbar.night_to_day)
-      }
-      // handle some cases
-      typeof utterancesTheme === 'function' && utterancesTheme()
-      typeof changeGiscusTheme === 'function' && changeGiscusTheme()
-      typeof FB === 'object' && window.loadFBComment()
-      window.DISQUS && document.getElementById('disqus_thread').children.length && setTimeout(() => window.disqusReset(), 200)
-      typeof runMermaid === 'function' && window.runMermaid()
-    },
-    showOrHideBtn: (e) => { // rightside 點擊設置 按鈕 展開
-      const rightsideHideClassList = document.getElementById('rightside-config-hide').classList
-      rightsideHideClassList.toggle('show')
-      if (e.classList.contains('show')) {
-        rightsideHideClassList.add('status')
-        setTimeout(() => {
-          rightsideHideClassList.remove('status')
-        }, 300)
-      }
-      e.classList.toggle('show')
-    },
-    scrollToTop: () => { // Back to top
-      btf.scrollToDest(0, 500)
-    },
-    hideAsideBtn: () => { // Hide aside
-      const $htmlDom = document.documentElement.classList
-      $htmlDom.contains('hide-aside')
-        ? saveToLocal.set('aside-status', 'show', 2)
-        : saveToLocal.set('aside-status', 'hide', 2)
-      $htmlDom.toggle('hide-aside')
-    },
-
-    runMobileToc: () => {
-      if (window.getComputedStyle(document.getElementById('card-toc')).getPropertyValue('opacity') === '0') window.mobileToc.open()
-      else window.mobileToc.close()
-    }
-  }
-
-  document.getElementById('rightside').addEventListener('click', function (e) {
-    const $target = e.target.id ? e.target : e.target.parentNode
-    switch ($target.id) {
-      case 'go-up':
-        rightSideFn.scrollToTop()
-        break
-      case 'rightside_config':
-        rightSideFn.showOrHideBtn($target)
-        break
-      case 'mobile-toc-button':
-        rightSideFn.runMobileToc()
-        break
-      case 'readmode':
-        rightSideFn.switchReadMode()
-        break
-      case 'darkmode':
-        rightSideFn.switchDarkMode()
-        break
-      case 'hide-aside-btn':
-        rightSideFn.hideAsideBtn()
-        break
-      default:
-        break
-    }
-  })
-
-  /**
-   * menu
-   * 側邊欄sub-menu 展開/收縮
-   */
-  const clickFnOfSubMenu = () => {
-    document.querySelectorAll('#sidebar-menus .site-page.group').forEach(function (item) {
-      item.addEventListener('click', function () {
-        this.classList.toggle('hide')
-      })
-    })
-  }
-
-  /**
-   * 複製時加上版權信息
-   */
-  const addCopyright = () => {
-    const copyright = GLOBAL_CONFIG.copyright
-    document.body.oncopy = (e) => {
-      e.preventDefault()
-      let textFont; const copyFont = window.getSelection(0).toString()
-      if (copyFont.length > copyright.limitCount) {
-        textFont = copyFont + '\n' + '\n' + '\n' +
-        copyright.languages.author + '\n' +
-        copyright.languages.link + window.location.href + '\n' +
-        copyright.languages.source + '\n' +
-        copyright.languages.info
-      } else {
-        textFont = copyFont
-      }
-      if (e.clipboardData) {
-        return e.clipboardData.setData('text', textFont)
-      } else {
-        return window.clipboardData.setData('text', textFont)
-      }
-    }
-  }
-
-  /**
-   * 網頁運行時間
-   */
-  const addRuntime = () => {
-    const $runtimeCount = document.getElementById('runtimeshow')
-    if ($runtimeCount) {
-      const publishDate = $runtimeCount.getAttribute('data-publishDate')
-      $runtimeCount.innerText = btf.diffDate(publishDate) + ' ' + GLOBAL_CONFIG.runtime
-    }
-  }
-
-  /**
-   * 最後一次更新時間
-   */
-  const addLastPushDate = () => {
-    const $lastPushDateItem = document.getElementById('last-push-date')
-    if ($lastPushDateItem) {
-      const lastPushDate = $lastPushDateItem.getAttribute('data-lastPushDate')
-      $lastPushDateItem.innerText = btf.diffDate(lastPushDate, true)
-    }
-  }
-
-  /**
-   * table overflow
-   */
-  const addTableWrap = () => {
-    const $table = document.querySelectorAll('#article-container :not(.highlight) > table, #article-container > table')
-    if ($table.length) {
-      $table.forEach(item => {
-        btf.wrap(item, 'div', { class: 'table-wrap' })
-      })
-    }
-  }
-
-  /**
-   * tag-hide
-   */
-  const clickFnOfTagHide = function () {
-    const $hideInline = document.querySelectorAll('#article-container .hide-button')
-    if ($hideInline.length) {
-      $hideInline.forEach(function (item) {
-        item.addEventListener('click', function (e) {
-          const $this = this
-          const $hideContent = $this.nextElementSibling
-          $this.classList.toggle('open')
-          if ($this.classList.contains('open')) {
-            if ($hideContent.querySelectorAll('.fj-gallery').length > 0) {
-              btf.initJustifiedGallery($hideContent.querySelectorAll('.fj-gallery'))
-            }
-          }
-        })
-      })
-    }
-  }
-
-  const tabsFn = {
-    clickFnOfTabs: function () {
-      document.querySelectorAll('#article-container .tab > button').forEach(function (item) {
-        item.addEventListener('click', function (e) {
-          const $this = this
-          const $tabItem = $this.parentNode
-
-          if (!$tabItem.classList.contains('active')) {
-            const $tabContent = $tabItem.parentNode.nextElementSibling
-            const $siblings = btf.siblings($tabItem, '.active')[0]
-            $siblings && $siblings.classList.remove('active')
-            $tabItem.classList.add('active')
-            const tabId = $this.getAttribute('data-href').replace('#', '')
-            const childList = [...$tabContent.children]
-            childList.forEach(item => {
-              if (item.id === tabId) item.classList.add('active')
-              else item.classList.remove('active')
-            })
-            const $isTabJustifiedGallery = $tabContent.querySelectorAll(`#${tabId} .fj-gallery`)
-            if ($isTabJustifiedGallery.length > 0) {
-              btf.initJustifiedGallery($isTabJustifiedGallery)
-            }
-          }
-        })
-      })
-    },
-    backToTop: () => {
-      document.querySelectorAll('#article-container .tabs .tab-to-top').forEach(function (item) {
-        item.addEventListener('click', function () {
-          btf.scrollToDest(btf.getEleTop(btf.getParents(this, '.tabs')), 300)
-        })
-      })
-    }
-  }
-
-  const toggleCardCategory = function () {
-    const $cardCategory = document.querySelectorAll('#aside-cat-list .card-category-list-item.parent i')
-    if ($cardCategory.length) {
-      $cardCategory.forEach(function (item) {
-        item.addEventListener('click', function (e) {
-          e.preventDefault()
-          const $this = this
-          $this.classList.toggle('expand')
-          const $parentEle = $this.parentNode.nextElementSibling
-          if (btf.isHidden($parentEle)) {
-            $parentEle.style.display = 'block'
-          } else {
-            $parentEle.style.display = 'none'
-          }
-        })
-      })
-    }
-  }
-
-  const switchComments = function () {
-    let switchDone = false
-    const $switchBtn = document.querySelector('#comment-switch > .switch-btn')
-    $switchBtn && $switchBtn.addEventListener('click', function () {
-      this.classList.toggle('move')
-      document.querySelectorAll('#post-comment > .comment-wrap > div').forEach(function (item) {
-        if (btf.isHidden(item)) {
-          item.style.cssText = 'display: block;animation: tabshow .5s'
-        } else {
-          item.style.cssText = "display: none;animation: ''"
-        }
-      })
-
-      if (!switchDone && typeof loadOtherComment === 'function') {
-        switchDone = true
-        loadOtherComment()
-      }
-    })
-  }
-
-  const addPostOutdateNotice = function () {
-    const data = GLOBAL_CONFIG.noticeOutdate
-    const diffDay = btf.diffDate(GLOBAL_CONFIG_SITE.postUpdate)
-    if (diffDay >= data.limitDay) {
-      const ele = document.createElement('div')
-      ele.className = 'post-outdate-notice'
-      ele.textContent = data.messagePrev + ' ' + diffDay + ' ' + data.messageNext
-      const $targetEle = document.getElementById('article-container')
-      if (data.position === 'top') {
-        $targetEle.insertBefore(ele, $targetEle.firstChild)
-      } else {
-        $targetEle.appendChild(ele)
-      }
-    }
-  }
-
-  const lazyloadImg = () => {
-    window.lazyLoadInstance = new LazyLoad({
-      elements_selector: 'img',
-      threshold: 0,
-      data_src: 'lazy-src'
-    })
-  }
-
-  const relativeDate = function (selector) {
-    selector.forEach(item => {
-      const $this = item
-      const timeVal = $this.getAttribute('datetime')
-      $this.innerText = btf.diffDate(timeVal, true)
-      $this.style.display = 'inline'
-    })
-  }
-
-  const unRefreshFn = function () {
-    window.addEventListener('resize', () => {
-      adjustMenu(false)
-      btf.isHidden(document.getElementById('toggle-menu')) && mobileSidebarOpen && sidebarFn.close()
-    })
-
-    document.getElementById('menu-mask').addEventListener('click', e => { sidebarFn.close() })
-
-    clickFnOfSubMenu()
-    GLOBAL_CONFIG.islazyload && lazyloadImg()
-    GLOBAL_CONFIG.copyright !== undefined && addCopyright()
-  }
-
-  window.refreshFn = function () {
-    initAdjust()
-
-    if (GLOBAL_CONFIG_SITE.isPost) {
-      GLOBAL_CONFIG.noticeOutdate !== undefined && addPostOutdateNotice()
-      GLOBAL_CONFIG.relativeDate.post && relativeDate(document.querySelectorAll('#post-meta time'))
-    } else {
-      GLOBAL_CONFIG.relativeDate.homepage && relativeDate(document.querySelectorAll('#recent-posts time'))
-      GLOBAL_CONFIG.runtime && addRuntime()
-      addLastPushDate()
-      toggleCardCategory()
-    }
-
-    scrollFnToDo()
-    GLOBAL_CONFIG_SITE.isHome && scrollDownInIndex()
-    addHighlightTool()
-    GLOBAL_CONFIG.isPhotoFigcaption && addPhotoFigcaption()
-    scrollFn()
-
-    const $jgEle = document.querySelectorAll('#article-container .fj-gallery')
-    $jgEle.length && runJustifiedGallery($jgEle)
-
-    runLightbox()
-    addTableWrap()
-    clickFnOfTagHide()
-    tabsFn.clickFnOfTabs()
-    tabsFn.backToTop()
-    switchComments()
-    document.getElementById('toggle-menu').addEventListener('click', () => { sidebarFn.open() })
-  }
-
-  refreshFn()
-  unRefreshFn()
-})
+/**
+ * Main js for hexo-theme-Annie (https://github.com/Sariay/hexo-theme-Annie).
+ *
+ * @Author   Sariay
+ * @DateTime 2018-08-26
+ */
+jQuery(document).ready(function ($) {
+
+	"use strict";
+
+	/**
+	 * Some global variables.
+	 * loadAnimation: The animation of loading for 'fun Annie_LoadPost()' & 'fun Annie_QueryPostsByTag()'.
+	 */
+	const ANNIE = {
+		scrollLimitG        : 500,
+		scrollSpeedG        : 500,
+		delayTimeG          : 500,
+		headerH             : $('header').outerHeight(),
+		postContentH        : $('#article-content').outerHeight(),
+		mainH               : $('main').outerHeight(),
+		investmentContainerH: $('.investment-container').outerHeight(),
+		postPageId          : '.layout-post',
+		postCoverId         : '#current-post-cover',
+		postTocId           : '#catelog-list',
+		paginationId        : '#pagination a',
+		paginationContainer : '#layout-cart, #layout-pure',
+		loadAnimation       : '<div class = "transition"><div class = "three-bounce1"> </div> <div class = "three-bounce2"> </div> <div class = "three-bounce3"> </div> </div> '
+	};
+
+	/**
+	 * Preloader for html page. If the background image of header is loaded, it will remove the mask layer immediately, or else after 10 seconds at most!
+	 *
+	 * @method   Annie_Preloader
+	 */
+	const Annie_Preloader = function () {
+		let mode = CONFIG_BGIMAGE.mode,
+			curImgSrc = ' ',
+			randomNum = 0,
+			randomYouMax = CONFIG_BGIMAGE.randomYouMax,			
+			normalSrc = CONFIG_BGIMAGE.normalSrc,
+			randomYouSrc = CONFIG_BGIMAGE.randomYouSrc,
+			randomOtherSrc = CONFIG_BGIMAGE.randomOtherSrc;
+		let postPageId = ANNIE.postPageId,
+			postCoverId = ANNIE.postCoverId;
+
+		if ($(postPageId).length && $(postCoverId).length) {
+			mode = 'post';
+		}
+
+		switch (mode) {
+			case 'random_you':
+				{
+					randomNum = Math.floor(Math.random() * (randomYouMax - 1) + 1);
+					curImgSrc = randomYouSrc + randomNum + '.jpg';
+				}
+				break;
+			case 'random_other':
+				{
+					curImgSrc = randomOtherSrc;
+				}
+				break;
+			case 'normal':
+				{
+					curImgSrc = normalSrc;
+				}
+				break;
+			case 'post':
+				{
+					curImgSrc = $(postCoverId).attr('data-scr');
+				}
+				break;
+			default:
+				{
+					//Api: https://api.berryapi.net/docs.html
+					curImgSrc = 'https://api.berryapi.net/?service=App.Bing.Images&day=-0';
+				}
+				break;
+		}
+		
+		/**
+		 * To set the background of the header.
+		 *
+		 * @method   Annie_SetBg
+		 * @param    {[type]}    imgSrc [description]
+		 */
+		function Annie_SetBg(imgSrc) {
+			let backgroundImg = 'url(' + imgSrc + ')';
+			$('header').css('background-image', backgroundImg);
+		}
+		
+		Annie_SetBg(curImgSrc);
+
+		/**
+		 * To set & then remove the mask layer for html page!
+		 *
+		 * @method   Annie_Transition
+		 */		
+		const PRELOADER = {
+			delayTime:　ANNIE.delayTimeG,
+			scrollSpeed: ANNIE.scrollSpeedG || 'normal',
+			removePreloaderMask: function(){
+				if($('#preloader').length){
+					$('#preloader').delay(this.delayTime).fadeOut('slow');
+				}
+			},
+			removeHtmlHidden: function(){
+				$('html').removeClass('html-loading');
+			},
+			Scroll: function(scrollHeight){
+				let scrollSpeed = this.scrollSpeed;			
+				
+				if ($(postPageId).length) {
+			
+				} else{
+					//Other pages
+					scrollSpeed = 'normal';
+				}
+					
+				$('html, body').delay( this.delayTime / 2 ).animate({
+					scrollTop: scrollHeight
+				}, scrollSpeed, 'linear');				
+			},
+			setCookie: function(cName, cValue){
+				document.cookie = cName + "=" + escape(cValue) + ";";
+			},
+			getCookie: function(cName){
+				let aCookie = document.cookie.split("; ");
+				for (let i = 0; i < aCookie.length; i++) {
+					let aCrumb = aCookie[i].split("=");
+					if (cName == aCrumb[0])
+						return unescape(aCrumb[1]);
+				}
+				return 0;
+			},
+			browserRefresh: function(){
+				// Api: https://developer.mozilla.org/zh-CN/docs/Web/API/Navigation_timing_API
+				if (window.performance.navigation.type == 1) {
+					return true;
+				} else {
+					return false;															
+				}
+			}
+		}
+		
+		let currentScrollHeight = 0,
+			currentScrollTop = 0,
+			browserRefreshStatus = PRELOADER.browserRefresh();
+			
+		$(window).scroll(function () {		
+			currentScrollTop = $(document).scrollTop();		
+			PRELOADER.setCookie('currentScrollTop', currentScrollTop);		
+		}).trigger('scroll');
+		
+		function singlePageScroll(){
+			if (browserRefreshStatus) {
+				currentScrollHeight = currentScrollTop || PRELOADER.getCookie('currentScrollTop');
+				console.info("This page is reloaded");
+			} else {
+				currentScrollHeight = ANNIE.headerH + 2;															
+			}
+			PRELOADER.Scroll(currentScrollHeight);				
+		}
+		
+		function otherPageScroll(){
+			if (browserRefreshStatus) {
+				currentScrollHeight = currentScrollTop || PRELOADER.getCookie('currentScrollTop');
+			
+				PRELOADER.Scroll(currentScrollHeight);		
+				console.info("This page is reloaded");
+			} 
+		}
+
+		function globalScroll(){
+			PRELOADER.removePreloaderMask();
+			PRELOADER.removeHtmlHidden();
+			if ($(postPageId).length) {
+				singlePageScroll();
+			} else{
+				//Other pages
+				otherPageScroll();
+			}			
+		}
+		
+		if(CONFIG_BGIMAGE.preloaderEnable && CONFIG_BGIMAGE.preloaderEnable != null){// 不设置预加载
+			// 10s以后
+			let stop = setTimeout(function () {
+				function timeoutCalled() {
+					PRELOADER.removePreloaderMask();		
+					PRELOADER.removeHtmlHidden();
+					singlePageScroll();
+					console.log('timeout');
+				}
+				return timeoutCalled();
+			}, ANNIE.delayTimeG * 20); // delayTime = ANNIE.delayTimeG * 20 = 10s
+			
+			// 10s以前, The background iamge of header is already loaded.
+			/**
+			 * We use "https://github.com/desandro/imagesloaded plugin" to check img.load status!
+			 * PLUGIN: plugin/imageloaded/imagesloaded.pkgd.min.js
+			 */
+			$("header").imagesLoaded({ background: true }, function () {
+				if (stop) {
+					clearTimeout(stop);	
+								
+					globalScroll();
+				}
+			});
+		} else {// 设置预加载
+			globalScroll();
+		}	
+	};
+
+	/**
+	 * To set the current active item of nav.
+	 *
+	 * @method   Annie_Nav
+	 */
+	const Annie_Nav = function () {
+		function currentNavStatus(element) {
+			//some operation
+			let urlStr = location.href,
+				urlSta = false,
+				homePage = ANNIE.paginationContainer,
+				allLink = element + ' ' + '#global-nav a';
+
+			$(allLink).each(function () {
+				let currentUrl = $(this).attr('class');
+				currentUrl = currentUrl.substr(10);
+
+				if (urlStr.indexOf(currentUrl) > -1 && $(this).attr('href') != ' ') {
+					$(this).parent('li').addClass('active');
+					urlSta = true;
+				} else {
+					$(this).removeClass('active');
+				}
+			});
+
+			if (!urlSta && ($(homePage).length)) {
+				$(allLink).eq(0).addClass('active');
+			}
+		}
+
+		function toggleNav(bool) {
+			$('.nav-container').toggleClass('is-visible', bool);
+		}
+
+		//open navigation
+		$('.nav-trigger').on('click', function (event) {
+			$('body').addClass('body-fixed-nav');
+			event.preventDefault();
+			toggleNav(true);
+		});
+
+		//close navigation
+		$('.nav-close').on('click', function (event) {
+			event.preventDefault();
+			toggleNav(false);
+			$('body').removeClass('body-fixed-nav');
+		});
+
+		currentNavStatus('#navigation-show');
+
+		currentNavStatus('.nav-container');
+	};
+
+	/**
+	 * Progress for page & post.
+	 *
+	 * @method   Annie_Progress
+	 */
+	const Annie_Progress = function () {
+		let navBarId = "#navigation-hide",
+			navBarHeight = $(navBarId).outerHeight();
+		let postTitleH = $(".article-title").outerHeight(),
+			postMetaH = $(".article-meta").outerHeight(),
+			postContentH = ANNIE.postContentH,
+			headerH = ANNIE.headerH,
+			postPageId = ANNIE.postPageId,
+			scrollLimit = ANNIE.scrollLimitG;
+
+		$(window).scroll(function () {
+			let scrollTop = $(document).scrollTop(),
+				docHeight = $(document).height(),
+				windowHeight = $(window).height(),
+				scrollPercent = 0;
+
+			if ($(postPageId).length) {
+				// 80 = div.layout-post的padding-top
+				scrollPercent = ((scrollTop - headerH) / (postContentH + postTitleH + postMetaH + 80 - windowHeight)) * 100;
+			} else {
+				scrollPercent = (scrollTop / (docHeight - windowHeight)) * 100;
+			}
+
+			scrollPercent = scrollPercent.toFixed(1);
+
+			if (scrollPercent > 100 || scrollPercent < 0) {
+				scrollPercent = 100;
+			}
+
+			$('#progress-percentage span').text(scrollPercent + "%");
+
+			$("#progress-bar").attr("style", "width:" + (scrollPercent) + "%; display: block;");
+
+			if (scrollTop >= ((scrollLimit > headerH) ? scrollLimit : headerH)) {
+				$(navBarId).css({
+					top: '0'
+				}).show();
+				$('.nav-trigger').show();
+			} else {
+				$(navBarId).css({
+					top: '-' + navBarHeight + 'px'
+				}).hide();
+				$('.nav-trigger').hide();
+			}
+
+			//Current post or page title
+			if (scrollTop >= headerH + 300) {
+				$('#navigation-hide p').show();
+			} else {
+				$('#navigation-hide p').hide();
+			}
+		}).trigger('scroll');
+	};
+
+	/**
+	 * Toc for post.
+	 * PLUGIN: plugin/toc/katelog.min.js
+	 *
+	 * @method   Annie_Toc
+	 */
+	const Annie_Toc = function () {
+		let scrollSpeed = ANNIE.scrollSpeedG,
+			upperLimit1 = ANNIE.headerH,
+			upperLimit2 = ANNIE.mainH - ANNIE.investmentContainerH;
+		let tocSwitchButton = ".switch-button",
+			delayTime = ANNIE.delayTimeG,
+			postTocId = ANNIE.postTocId,
+			postPageId = ANNIE.postPageId;
+
+		function fixedAndShowTocId() {
+			$(window).scroll(function () {
+				let scrollTop = $(document).scrollTop();
+
+				if ((scrollTop >= upperLimit1) && (scrollTop < upperLimit2)) {
+					//屏幕宽度<= 1024px时应隐藏
+					$(postTocId).css('position', 'fixed').show().fadeIn(delayTime);
+
+				} else {
+					$(postTocId).hide().fadeOut(delayTime);
+				}
+			});
+		}
+
+		function generateToclist() {
+			let katelogIns = new katelog({
+				contentEl: 'article-content',
+				catelogEl: 'catelog-list',
+				linkClass: 'k-catelog-link',
+				linkActiveClass: 'k-catelog-link-active',
+				selector: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+				supplyTop: 20,
+				active: function (el) { }
+			});
+			//TODO: 添加目录标题、层级标题
+		}
+
+		function adjustTocContainer() {
+			let clickCount = 1;
+
+			$(tocSwitchButton).on("click", function () {
+
+				$(this).toggleClass("toc-switch-button-active");
+
+				if (clickCount == 1) {
+					$('main').toggleClass("inline-flex");
+					setTimeout(function () {
+						$('#layout-toc').toggleClass("show").fadeToggle();
+					}, delayTime / 2); //delayTimeG = 500ms	
+
+					clickCount = 2;
+				} else {
+					$('#layout-toc').toggleClass("show").fadeToggle();
+					setTimeout(function () {
+						$('main').toggleClass("inline-flex");
+					}, delayTime / 2); //delayTimeG = 500ms
+
+					clickCount = 1;
+				}
+			});
+		}
+
+		if ($(postPageId).length) {
+			fixedAndShowTocId();
+		}
+
+		if ($(postTocId).length) {
+			generateToclist();
+		}
+
+		if ($(postPageId).length && $(postTocId).length) {
+			$(tocSwitchButton).show();
+
+			adjustTocContainer();
+		} else {
+			$(tocSwitchButton).hide();
+		}
+	};
+
+	/**
+	 * Anchor for toTop and readMore.
+	 *
+	 * @method   Annie_Anchor
+	 */
+	const Annie_Anchor = function () {
+		let scrollSpeed = ANNIE.scrollSpeedG,
+			upperLimit = ANNIE.scrollLimitG,
+			delayTime = ANNIE.delayTimeG,
+			toTop = $('#totop'),
+			toTop2 = $('#totop-post-page'),
+			readMore = $('#read-more');
+
+		toTop.hide();
+
+		$(window).scroll(function () {
+			let scrollTop = $(document).scrollTop();
+
+			if (scrollTop > upperLimit) {
+				$(toTop).stop().fadeTo(delayTime, 1);
+			} else {
+				$(toTop).stop().fadeTo(delayTime, 0);
+			}
+		});
+		
+		function anchor(element, height, speed){
+			$(element).click(function () {
+				$('html, body').animate({
+					scrollTop: height
+				}, speed);
+				return false;
+			});			
+		}
+		anchor(toTop, 0, scrollSpeed);
+		anchor(toTop2, 0, scrollSpeed);
+		anchor(readMore, $('main').offset().top + 2, scrollSpeed);
+	};
+
+	/**
+	 * Archive by year.
+	 *
+	 * @method   Annie_Archive
+	 */
+	const Annie_Archive = function () {
+		
+		function getZodiac(year) {
+			let zodiac = 'rat';
+
+			switch (year % 12) {
+				case 0:
+					zodiac = 'monkey';
+					break;
+				case 1:
+					zodiac = 'rooster';
+					break;
+				case 2:
+					zodiac = 'dog';
+					break;
+				case 3:
+					zodiac = 'pig';
+					break;
+				case 4:
+					zodiac = 'rat';
+					break;
+				case 5:
+					zodiac = 'ox';
+					break;
+				case 6:
+					zodiac = 'tiger'
+					break;
+				case 7:
+					zodiac = 'rabbit'
+					break;
+				case 8:
+					zodiac = 'dragon'
+					break;
+				case 9:
+					zodiac = 'snake'
+					break;
+				case 10:
+					zodiac = 'horse'
+					break;
+				case 11:
+					zodiac = 'goat'
+					break;
+				default:
+					break;
+			}
+			return zodiac;
+		}
+
+		if (window.location.pathname.indexOf("archive") == -1) {
+			return;
+		}
+		let currentYear = "",
+			Newy = "";
+		$("#layout-archive-year  ul li").each(function (i) {
+			let year = $(this).find("em").attr("year");
+			if (year < currentYear || currentYear == "") {
+				currentYear = year;
+				if (Newy == "") {
+					Newy = year
+				}
+				$(this).before("<h3 class = '" + currentYear + "'>" + currentYear + "&nbsp;&nbsp;" + "<i class='icon-" + getZodiac(year) + "'></i>" + "<em>(" + $("[year = '" + currentYear + "']").length + "篇)</em>" + "</h3>");
+			}
+			$(this).attr("year", currentYear);
+		});
+
+		$("#layout-archive-year h3").each(function () {
+			$("#layout-archive-year ul li[year = '" + $(this).attr("class") + "'").wrapAll("<div year = '" + $(this).attr("class") + "'></div>");
+			$("h3." + $(this).attr("class")).click(function () {
+				$(this).toggleClass("title-bg").next().slideToggle(300);
+
+			})
+		});
+		$("#layout-archive-year ul div[year!= '" + Newy + "']").hide();
+		$("h3." + Newy).addClass("title-bg");
+		//TODO: Archive by month
+	};
+
+	/**
+	 * To load more posts for index page！
+	 *
+	 * @method   Annie_LoadPost
+	 */
+	const Annie_LoadPost = function () {
+		let paginationId = ANNIE.paginationId,
+			loadAnimation = ANNIE.loadAnimation,
+			delayTime = ANNIE.delayTimeG,
+			paginationContainer = ANNIE.paginationContainer,
+			leancloudCount = CONFIG_LEACLOUD_COUNT.enable || false;
+		const loaderTitle = $(paginationId).attr('data-title'),
+			loaderStatus = $(paginationId).attr('data-status');
+				
+		$('body').on('click', paginationId, function () {
+			let thisUrl = $(this).attr("href");
+			$(paginationId).text(" ").append(loadAnimation);
+
+			$.ajax({
+				type: "get",
+				url: thisUrl,
+				async: true,
+				timeout: delayTime * 20, //10s
+				error: function (event, xhr, options) {
+
+					$(paginationId).attr("href", thisUrl).empty().text( loaderTitle );
+
+					alert("Error requesting " + options.url + ":  " + xhr.status + ",  " + xhr.statusText);
+
+					console.log("Error requesting " + options.url + ":  " + xhr.status + ",  " + xhr.statusText)
+				},
+				success: function (data) {
+					let result = $(data).find("#post"),
+						newhref = $(data).find(paginationId).attr("href");
+
+					$(paginationContainer).append(result.fadeIn(delayTime).addClass('animation-zoom'));
+
+					if ( leancloudCount ) {
+						//FIX: ajax bug
+						annieShowData(initCounter, initPost);
+					}
+
+					$(paginationId).empty().text( loaderTitle );
+
+					if (newhref != undefined) {
+						$(paginationId).attr("href", newhref);
+					} else {
+						$("#pagination").html("<span>" + loaderStatus + "</span>");
+					}
+				},
+				complete: function () {
+					// TODO
+				}
+			});
+
+			return false;
+		});
+	};
+
+	/**
+	 * Tab to switch 'relate' or 'comment' module
+	 *
+	 * @method   Annie_Tab
+	 */
+	const Annie_Tab = function () {
+		function tabs(tabTit, on, tabCon) {
+			$(tabCon).each(function () {
+				$(this).children().eq(0).show();
+			});
+
+			$(tabTit).each(function () {
+				$(this).children().eq(0).addClass(on);
+			});
+
+			$(tabTit).children().click(function () {
+				$(this).addClass(on).siblings().removeClass(on);
+				let index = $(tabTit).children().index(this);
+				$(tabCon).children().eq(index).show().siblings().hide();
+			});
+		}
+		tabs(".investment-title-1", "on", ".investment-content");
+	};
+
+	/**
+	 * Query & load the posts which have specified tag or category!
+	 * TODO: We can use "Content filtering plugin" to instead this function!
+	 *
+	 * @method   Annie_QueryPostsByTag
+	 */
+	const Annie_QueryPostsByTag = function () {
+		let loadAnimation = ANNIE.loadAnimation,
+			delayTime = ANNIE.delayTimeG;
+
+		$('.tags a, .category a').click(function () {
+			$("#TCP-title").text("查询结果");
+			//添加查询结果之前，清除容器中的内容
+			$("#TCP-content").text("").append(loadAnimation);
+			let href = $(this).attr("href");
+			if (href != undefined) {
+				$.ajax({
+					url: href,
+					type: "get",
+					async: true,
+					timeout: delayTime * 20, //10s
+					error: function (event, xhr, options) {
+
+						alert("Error requesting " + options.url + ": " + xhr.status + "," + xhr.statusText);
+
+						console.log("Error requesting " + options.url + ": " + xhr.status + "," + xhr.statusText)
+					},
+					success: function (data) {
+						$("#TCP-content").empty();
+
+						let result = $(data).find(".layout-archive");
+						$('#TCP-content').append(result.fadeIn(delayTime).addClass('animation-zoom'));
+						$(".layout-archive").css({
+							'paddingTop': '0'
+						});
+						$(".layout-archive i").css({
+							'marginTop': '5px',
+							'marginBottom': '30px'
+						});
+					},
+					complete: function () {
+						// TODO
+					}
+				});
+			}
+			return false;
+		});
+	};
+
+	/**
+	 * PLUGIN: plugin/chinese/chinese.js
+	 *
+	 * @method   Annie_LanguageSet
+	 */
+	const Annie_LanguageSet = function () {
+		zh_init();
+	};
+
+	/**
+	 * PLUGIN: plugin/imglazyloader/yall.min.js
+	 *
+	 * @method   Annie_ImageLazyLoad
+	 */
+	const Annie_ImageLazyLoad = function () {
+		yall({
+			observeChanges: true
+		});
+	};
+
+	/**
+	 * Adjust the browser scroll bar for 'html body', 'code bloack'.
+	 * PLUGIN: plugin/nicescroll/jquery.nicescroll.js
+	 *
+	 * @method   Annie_NiceScroll
+	 */
+	const Annie_NiceScroll = function () {
+		const niceScrollId = 'body, .highlight',
+			niceScrollSetting = $(niceScrollId).niceScroll({
+				cursorborder: "none",
+				autohidemode: true
+			});
+
+		// PLUGIN: js/resizediv/resizediv.js
+		$(niceScrollId).resize(function (event) {
+			setTimeout(function () {
+				niceScrollSetting.resize();
+			}, 2);
+		});
+	};
+
+	/**
+	 * Other js functions. An function example might be as follows: 
+	 */
+	/*  
+		const Annie_XXX = function(argument) {
+			// body...
+		};
+	*/
+
+	/* Initialize */
+	(function Annie_Init() {
+		Annie_Preloader();
+		Annie_Nav();
+		Annie_Progress();
+		Annie_Toc();
+		Annie_Anchor();
+		Annie_Archive();
+		Annie_LoadPost();
+		Annie_Tab();
+		Annie_QueryPostsByTag();
+		Annie_LanguageSet();
+		Annie_ImageLazyLoad();
+		Annie_NiceScroll();
+	})();
+});
+
+console.log("%c Github %c", "background: #222222; color: #ffffff", " ", "https://github.com/Sariay/hexo-theme-Annie");
